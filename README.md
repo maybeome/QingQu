@@ -1,1 +1,93 @@
-# QingQu
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Coyote 问答游戏</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial; padding: 20px; background: #111; color: #0f0; }
+    button { padding: 15px; font-size: 18px; margin: 10px 0; width: 100%; }
+    #log { white-space: pre-wrap; font-size: 14px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <h1>🔗 Coyote 问答游戏</h1>
+  <button onclick="connect()">连接设备</button>
+  <button onclick="startGame()">开始游戏</button>
+  <div id="question"></div>
+  <div id="choices"></div>
+  <div id="log"></div>
+
+  <script>
+    let device, characteristic;
+    let current = 0;
+
+    const quiz = [
+      { q: "Python 是编译型语言吗？", a: ["是", "否"], c: 1 },
+      { q: "WebBluetooth 支持 iPhone 吗？", a: ["支持", "不支持"], c: 1 },
+      { q: "Coyote 有几个通道？", a: ["1", "2"], c: 1 }
+    ];
+
+    function log(msg) {
+      document.getElementById('log').textContent += msg + '\n';
+    }
+
+    async function connect() {
+      try {
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: 'Coyote' }],
+          optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+        characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+        log("✅ 已连接 Coyote");
+      } catch (e) {
+        log("❌ 连接失败: " + e);
+      }
+    }
+
+    async function sendCommand(a, b, wave, freq, on) {
+      if (!characteristic) return;
+      const cmd = new Uint8Array([a, b, wave, freq, 0, on ? 0x01 : 0x00]);
+      await characteristic.writeValue(cmd);
+    }
+
+    function showQuestion() {
+      const q = quiz[current];
+      document.getElementById('question').innerHTML = `<h2>${q.q}</h2>`;
+      document.getElementById('choices').innerHTML = q.a.map((ans, i) =>
+        `<button onclick="check(${i})">${ans}</button>`).join('');
+    }
+
+    async function check(i) {
+      const correct = quiz[current].c;
+      if (i === correct) {
+        log("✅ 答对！");
+        await sendCommand(0, 0, 0, 0, false);
+      } else {
+        log("❌ 答错！电击！");
+        await sendCommand(20, 10, Math.floor(Math.random() * 5), 1, true);
+        setTimeout(() => sendCommand(0, 0, 0, 0, false), 3000);
+      }
+      current++;
+      if (current < quiz.length) {
+        setTimeout(showQuestion, 1000);
+      } else {
+        log("🎉 游戏结束！");
+      }
+    }
+
+    function startGame() {
+      if (!characteristic) {
+        log("请先连接设备");
+        return;
+      }
+      current = 0;
+      showQuestion();
+    }
+  </script>
+
+</body>
+</html>
